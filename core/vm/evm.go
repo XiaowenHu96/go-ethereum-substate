@@ -131,6 +131,8 @@ type EVM struct {
 	callGasTemp uint64
 	// An optional override to intercept EVM calls.
 	CallContext CallContext
+
+	vmTimer *VMTimer
 }
 
 // NewEVM returns a new EVM. The returned EVM is not thread safe and should

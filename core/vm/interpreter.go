@@ -221,8 +221,10 @@ func (s *InterpreterState) Stop() {
 func (in *GethEVMInterpreter) run(state *InterpreterState, input []byte, readOnly bool) (ret []byte, err error) {
 	if MicroProfiling {
 		return in.runMicroProfiling(state, input, readOnly)
-	} else if (BasicBlockProfiling) {
+	} else if BasicBlockProfiling {
 		return in.runBasicBlockProfiling(state, input, readOnly)
+	} else if SIVMMode {
+		return in.runSI(state, input, readOnly)
 	} else {
 		return in.runPlain(state, input, readOnly)
 	}
@@ -521,11 +523,11 @@ func (in *GethEVMInterpreter) runBasicBlockProfiling(state *InterpreterState, in
 		pc   = uint64(0) // program counter
 		cost uint64
 		// copies used by tracer
-		pcCopy  uint64 // needed for the deferred Tracer
-		gasCopy uint64 // for Tracer to log gas remaining before execution
-		logged  bool   // deferred Tracer should ignore already logged steps
-		res     []byte // result of the opcode execution function
-		basicBlockFrequency = map[uint]BasicBlock{}    // basic block map that translates an address to a basic block
+		pcCopy              uint64                  // needed for the deferred Tracer
+		gasCopy             uint64                  // for Tracer to log gas remaining before execution
+		logged              bool                    // deferred Tracer should ignore already logged steps
+		res                 []byte                  // result of the opcode execution function
+		basicBlockFrequency = map[uint]BasicBlock{} // basic block map that translates an address to a basic block
 
 	)
 	// Don't move this deferrred function, it's placed before the capturestate-deferred method,
@@ -553,8 +555,8 @@ func (in *GethEVMInterpreter) runBasicBlockProfiling(state *InterpreterState, in
 	defer func() {
 		// process basic block frequencies
 		bbpd := BasicBlockProfileData{
-			Contract: *contract.CodeAddr,
-			BasicBlockFrequency:  basicBlockFrequency}
+			Contract:            *contract.CodeAddr,
+			BasicBlockFrequency: basicBlockFrequency}
 		ProcessBasicBlockProfileData(&bbpd)
 	}()
 
@@ -809,6 +811,7 @@ func (in *GethEVMInterpreter) runPlain(state *InterpreterState, input []byte, re
 	steps := 0
 
 	for {
+		in.evm.vmTimer.dispatches += 1
 		// Block until next step should be processed.
 		if state.next != nil {
 			state.pc = pc
@@ -917,4 +920,94 @@ func (in *GethEVMInterpreter) runPlain(state *InterpreterState, input []byte, re
 		}
 	}
 	return nil, nil
+}
+
+func (in *GethEVMInterpreter) runSI(state *InterpreterState, input []byte, readOnly bool) (ret []byte, err error) {
+	defer func() {
+		state.finished = true
+		if state.done != nil {
+			close(state.done)
+		}
+	}()
+	// Increment the call depth which is restricted to 1024
+	in.evm.Depth++
+	defer func() { in.evm.Depth-- }()
+
+	// Make sure the readOnly is only set if we aren't in readOnly yet.
+	// This also makes sure that the readOnly flag isn't removed for child calls.
+	if readOnly && !in.readOnly {
+		in.readOnly = true
+		defer func() { in.readOnly = false }()
+	}
+
+	// Reset the previous call's return data. It's unimportant to preserve the old buffer
+	// as every returning call will return new data anyway.
+	in.returnData = nil
+
+	// Don't bother with the execution if there's no code.
+	if len(state.Contract.Code) == 0 {
+		return nil, nil
+	}
+
+	in.evm.vmTimer.StopTimer()
+	sivm_code := Convert(state.Contract.Code, state.Contract.CodeHash)
+	in.evm.vmTimer.StartTimer()
+
+	var (
+		contract    = state.Contract // processed contract
+		op          OpCode           // current opcode
+		sivm_op     SIVM_OpCode
+		mem         = state.Memory // bound memory
+		stack       = state.Stack  // local stack
+		callContext = &ScopeContext{
+			Memory:   mem,
+			Stack:    stack,
+			Contract: contract,
+		}
+		// For optimisation reason we're using uint64 as the program counter.
+		// It's theoretically possible to go above 2^64. The YP defines the PC
+		// to be uint256. Practically much less so feasible.
+		pc   = uint64(0) // program counter
+		cost uint64
+		// copies used by tracer
+		pcCopy  uint64 // needed for the deferred Tracer
+		gasCopy uint64 // for Tracer to log gas remaining before execution
+		logged  bool   // deferred Tracer should ignore already logged steps
+		res     []byte // result of the opcode execution function
+	)
+	// Don't move this deferrred function, it's placed before the capturestate-deferred method,
+	// so that it get's executed _after_: the capturestate needs the stacks before
+	// they are returned to the pools
+	contract.Input = input
+
+	if in.cfg.Debug {
+		defer func() {
+			if err != nil {
+				if !logged {
+					in.cfg.Tracer.CaptureState(in.evm, pcCopy, op, gasCopy, cost, callContext, in.returnData, in.evm.Depth, err)
+				} else {
+					in.cfg.Tracer.CaptureFault(in.evm, pcCopy, op, gasCopy, cost, callContext, in.evm.Depth, err)
+				}
+			}
+		}()
+	}
+	// The Interpreter main run loop (contextual). This loop runs until either an
+	// explicit STOP, RETURN or SELFDESTRUCT is executed, an error occurred during
+	// the execution of one of the operations or until the done flag is set by the
+	// parent context.
+	// steps := 0
+
+	for {
+		sivm_op = sivm_code.GetOp(pc)
+		in.evm.vmTimer.dispatches += 1
+		res, err = sivm_jump_table[sivm_op](&pc, in, callContext)
+		switch {
+		case err == ErrExecutionReverted:
+			return res, err
+		case err == ErrSIVMHalts:
+			return res, nil
+		case err != nil:
+			return nil, err
+		}
+	}
 }
