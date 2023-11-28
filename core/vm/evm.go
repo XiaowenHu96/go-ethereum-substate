@@ -132,7 +132,7 @@ type EVM struct {
 	// An optional override to intercept EVM calls.
 	CallContext CallContext
 
-	vmTimer *VMTimer
+	VMTimer *VMTimer
 }
 
 // NewEVM returns a new EVM. The returned EVM is not thread safe and should

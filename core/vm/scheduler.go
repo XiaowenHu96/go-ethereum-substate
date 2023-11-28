@@ -100,11 +100,11 @@ func (s *Scheduler) maximal_interval_schedule(intervals []ACResult) ([]ACResult,
 	return res, m[len(m)-1]
 }
 
-func (s *Scheduler) Schedule(code []byte) []ACResult {
+func (s *Scheduler) Schedule(code []byte) ([]ACResult, float64) {
 	candidates := s.searcher.search(code)
 	// add dummy interval
 	candidates = append(candidates, ACResult{0, 0, 0})
-    schedule, _ := s.maximal_interval_schedule(candidates)
-    // fmt.Printf("Speedup: %f\n", float64(len(code)) / float64(len(code) - gain))
-    return schedule
+	schedule, saved_dispatches := s.maximal_interval_schedule(candidates)
+	// fmt.Printf("Speedup: %f\n", float64(len(code)) / float64(len(code) - gain))
+	return schedule, float64(len(code)) / float64(len(code)-saved_dispatches)
 }

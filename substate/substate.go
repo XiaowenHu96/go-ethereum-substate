@@ -26,6 +26,38 @@ func NewSubstateAccount(nonce uint64, balance *big.Int, code []byte) *SubstateAc
 	}
 }
 
+func (want *SubstateAccount) SemanticEqual(input, have *SubstateAccount) bool {
+	if want == have {
+		return true
+	}
+
+	if (want == nil || have == nil) && want != have {
+		return false
+	}
+
+	equal := (want.Nonce == have.Nonce &&
+		want.Balance.Cmp(have.Balance) == 0 &&
+		bytes.Equal(want.Code, have.Code) &&
+		len(want.Storage) >= len(have.Storage)) // allow missing key in have
+	if !equal {
+		return false
+	}
+
+	// allow missing key in want only if the key did not change during tx
+	for k, xv := range want.Storage {
+		yv, exist := have.Storage[k]
+		if !(exist && xv == yv) {
+			if zv, exist := input.Storage[k]; exist && zv == xv {
+				continue
+			} else {
+				return false
+			}
+		}
+	}
+
+	return true
+}
+
 func (x *SubstateAccount) Equal(y *SubstateAccount) bool {
 	if x == y {
 		return true
@@ -77,6 +109,28 @@ func (x SubstateAlloc) Equal(y SubstateAlloc) bool {
 	for k, xv := range x {
 		yv, exist := y[k]
 		if !(exist && xv.Equal(yv)) {
+			return false
+		}
+	}
+
+	return true
+}
+
+func (want SubstateAlloc) SemanticEqual(input, have SubstateAlloc) bool {
+	// allow missing alloc
+	if len(have) > len(want) {
+		return false
+	}
+
+	for k, xv := range want {
+		yv, exist := have[k]
+		if !exist {
+			// allow missing alloc as long as the key did not change during tx
+			if zv, exist := input[k]; exist && zv.Equal(input[k]) {
+				continue
+			}
+		}
+		if !(exist && xv.SemanticEqual(input[k], yv)) {
 			return false
 		}
 	}

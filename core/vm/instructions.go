@@ -17,7 +17,6 @@
 package vm
 
 import (
-	// "fmt"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -237,8 +236,8 @@ func opSAR(pc *uint64, interpreter *GethEVMInterpreter, scope *ScopeContext) ([]
 }
 
 func opSha3(pc *uint64, interpreter *GethEVMInterpreter, scope *ScopeContext) ([]byte, error) {
-    interpreter.evm.vmTimer.StopTimer()
-    defer interpreter.evm.vmTimer.StartTimer()
+    interpreter.evm.VMTimer.StopTimer()
+    defer interpreter.evm.VMTimer.StartTimer()
 	offset, size := scope.Stack.pop(), scope.Stack.peek()
 	data := scope.Memory.GetPtr(int64(offset.Uint64()), int64(size.Uint64()))
 

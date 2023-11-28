@@ -55,10 +55,8 @@ func (t *VMTimer) StopTimer() {
 	t.started = false
 }
 
-func EnableTimer(vm *EVM, timer *VMTimer) {
-	vm.vmTimer = timer
-	vm.vmTimer.StartTimer()
-	vm.vmTimer.dispatches = 0
+func InstallTimer(vm *EVM, timer *VMTimer) {
+	vm.VMTimer = timer
 }
 
 // create a proxy for stateDB that has a built-in timer installed
