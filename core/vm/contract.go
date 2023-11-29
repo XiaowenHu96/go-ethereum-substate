@@ -53,10 +53,11 @@ type Contract struct {
 	jumpdests map[common.Hash]bitvec // Aggregated result of JUMPDEST analysis.
 	analysis  bitvec                 // Locally cached result of JUMPDEST analysis
 
-	Code     []byte
-	CodeHash common.Hash
-	CodeAddr *common.Address
-	Input    []byte
+	Code      []byte
+	SIVMCode SIVM_Code
+	CodeHash  common.Hash
+	CodeAddr  *common.Address
+	Input     []byte
 
 	Gas   uint64
 	value *big.Int

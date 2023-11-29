@@ -225,6 +225,10 @@ func (in *GethEVMInterpreter) run(state *InterpreterState, input []byte, readOnl
 	} else if BasicBlockProfiling {
 		return in.runBasicBlockProfiling(state, input, readOnly)
 	} else if SIVMMode {
+		in.evm.VMTimer.StopTimer()
+		code_cache := Convert(state.Contract.Code, state.Contract.CodeHash)
+		state.Contract.SIVMCode = code_cache.sivm_code
+		in.evm.VMTimer.StartTimer()
 		return in.runSI(state, input, readOnly)
 	} else {
 		return in.runPlain(state, input, readOnly)
@@ -950,11 +954,11 @@ func (in *GethEVMInterpreter) runSI(state *InterpreterState, input []byte, readO
 		return nil, nil
 	}
 
-	in.evm.VMTimer.StopTimer()
-	code_cache := Convert(state.Contract.Code, state.Contract.CodeHash)
-	sivm_code := code_cache.sivm_code
-	// interpreter_code := code_cache.interpreter_code
-	in.evm.VMTimer.StartTimer()
+	// in.evm.VMTimer.StopTimer()
+	// code_cache := Convert(state.Contract.Code, state.Contract.CodeHash)
+	// sivm_code := code_cache.sivm_code
+	// // interpreter_code := code_cache.interpreter_code
+	// in.evm.VMTimer.StartTimer()
 	// if !SIVMDummyConvert && code_cache.ratio <= 3 {
 	// 	// fallback to normal interpreter
 	// 	return in.runPlain(state, input, readOnly)
@@ -1025,7 +1029,7 @@ func (in *GethEVMInterpreter) runSI(state *InterpreterState, input []byte, readO
 			break
 		}
 		in.evm.VMTimer.dispatches += 1
-		sivm_op = sivm_code.GetOp(pc)
+		sivm_op = state.Contract.SIVMCode.GetOp(pc)
 		// op = interpreter_code.GetOp(pc)
 		if sivm_op <= 255 {
 			op = OpCode(sivm_op)
