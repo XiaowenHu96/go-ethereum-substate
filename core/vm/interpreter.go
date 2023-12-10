@@ -220,15 +220,15 @@ func (s *InterpreterState) Stop() {
 
 // Proxy run function
 func (in *GethEVMInterpreter) run(state *InterpreterState, input []byte, readOnly bool) (ret []byte, err error) {
+	in.evm.VMTimer.StopTimer()
+	code_cache := Convert(state.Contract.Code, state.Contract.CodeHash)
+	state.Contract.SIVMCode = code_cache.sivm_code
+	in.evm.VMTimer.StartTimer()
 	if MicroProfiling {
 		return in.runMicroProfiling(state, input, readOnly)
 	} else if BasicBlockProfiling {
 		return in.runBasicBlockProfiling(state, input, readOnly)
 	} else if SIVMMode {
-		in.evm.VMTimer.StopTimer()
-		code_cache := Convert(state.Contract.Code, state.Contract.CodeHash)
-		state.Contract.SIVMCode = code_cache.sivm_code
-		in.evm.VMTimer.StartTimer()
 		return in.runSI(state, input, readOnly)
 	} else {
 		return in.runPlain(state, input, readOnly)
@@ -1031,83 +1031,19 @@ func (in *GethEVMInterpreter) runSI(state *InterpreterState, input []byte, readO
 		in.evm.VMTimer.dispatches += 1
 		sivm_op = state.Contract.SIVMCode.GetOp(pc)
 		// op = interpreter_code.GetOp(pc)
-		if sivm_op <= 255 {
-			op = OpCode(sivm_op)
-			operation := in.cfg.JumpTable[op]
-			if operation == nil {
-				return nil, &ErrInvalidOpCode{opcode: op}
-			}
-			// Validate stack
-			if sLen := stack.len(); sLen < operation.minStack {
-				return nil, &ErrStackUnderflow{stackLen: sLen, required: operation.minStack}
-			} else if sLen > operation.maxStack {
-				return nil, &ErrStackOverflow{stackLen: sLen, limit: operation.maxStack}
-			}
-			if in.readOnly && in.evm.chainRules.IsByzantium {
-				if operation.writes || (op == CALL && stack.Back(2).Sign() != 0) {
-					return nil, ErrWriteProtection
-				}
-			}
-			cost = operation.constantGas // For tracing
-			if !contract.UseGas(operation.constantGas) {
-				return nil, ErrOutOfGas
-			}
-
-			var memorySize uint64
-			if operation.memorySize != nil {
-				memSize, overflow := operation.memorySize(stack)
-				if overflow {
-					return nil, ErrGasUintOverflow
-				}
-				if memorySize, overflow = math.SafeMul(toWordSize(memSize), 32); overflow {
-					return nil, ErrGasUintOverflow
-				}
-			}
-			if operation.dynamicGas != nil {
-				var dynamicCost uint64
-				dynamicCost, err = operation.dynamicGas(in.evm, contract, stack, mem, memorySize)
-				cost += dynamicCost // total cost, for debug tracing
-				if err != nil || !contract.UseGas(dynamicCost) {
-					return nil, ErrOutOfGas
-				}
-			}
-			if memorySize > 0 {
-				mem.Resize(memorySize)
-			}
-
-			if in.cfg.Debug {
-				in.cfg.Tracer.CaptureState(in.evm, pc, op, gasCopy, cost, callContext, in.returnData, in.evm.Depth, err)
-				logged = true
-			}
-
-			res, err = operation.execute(&pc, in, callContext)
-			if operation.returns {
-				in.returnData = res
-			}
-			switch {
-			case err != nil:
-				return nil, err
-			case operation.reverts:
-				return res, ErrExecutionReverted
-			case operation.halts:
-				return res, nil
-			case !operation.jumps:
-				pc++
-			}
-		} else {
-			// fmt.Printf("pc: %d (%v), gas: %d\n", pc, sivm_op, contract.Gas)
-			res, err = sivm_jump_table[sivm_op](&pc, in, callContext)
-			// if err == ErrOutOfGas {
-			// 	fmt.Println("Out of gas from: ", sivm_op)
-			// }
-			switch {
-			case err == ErrExecutionReverted:
-				return res, err
-			case err == ErrSIVMHalts:
-				return res, nil
-			case err != nil:
-				return nil, err
-			}
+		// fmt.Printf("pc: %d (%v), gas: %d\n", pc, sivm_op, contract.Gas)
+		// fmt.Println("OP: ", sivm_op)
+		res, err = sivm_jump_table[sivm_op](&pc, in, callContext)
+		// if err == ErrOutOfGas {
+			// fmt.Println("Out of gas from: ", sivm_op)
+		// }
+		switch {
+		case err == ErrExecutionReverted:
+			return res, err
+		case err == ErrSIVMHalts:
+			return res, nil
+		case err != nil:
+			return nil, err
 		}
 	}
 	return nil, nil
