@@ -797,6 +797,9 @@ func (in *GethEVMInterpreter) runPlain(state *InterpreterState, input []byte, re
 	// so that it get's executed _after_: the capturestate needs the stacks before
 	// they are returned to the pools
 	contract.Input = input
+	in.evm.VMTimer.StopTimer()
+	contract.isCode(0)
+	in.evm.VMTimer.StartTimer()
 
 	if in.cfg.Debug {
 		defer func() {
@@ -993,6 +996,9 @@ func (in *GethEVMInterpreter) runSI(state *InterpreterState, input []byte, readO
 	// so that it get's executed _after_: the capturestate needs the stacks before
 	// they are returned to the pools
 	contract.Input = input
+	in.evm.VMTimer.StopTimer()
+	contract.isCode(0)
+	in.evm.VMTimer.StartTimer()
 
 	if in.cfg.Debug {
 		defer func() {
