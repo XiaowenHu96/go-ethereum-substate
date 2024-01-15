@@ -220,10 +220,8 @@ func (s *InterpreterState) Stop() {
 
 // Proxy run function
 func (in *GethEVMInterpreter) run(state *InterpreterState, input []byte, readOnly bool) (ret []byte, err error) {
-	in.evm.VMTimer.StopTimer()
 	code_cache := Convert(state.Contract.Code, state.Contract.CodeHash)
 	state.Contract.SIVMCode = code_cache.sivm_code
-	in.evm.VMTimer.StartTimer()
 	if MicroProfiling {
 		return in.runMicroProfiling(state, input, readOnly)
 	} else if BasicBlockProfiling {
@@ -797,9 +795,7 @@ func (in *GethEVMInterpreter) runPlain(state *InterpreterState, input []byte, re
 	// so that it get's executed _after_: the capturestate needs the stacks before
 	// they are returned to the pools
 	contract.Input = input
-	in.evm.VMTimer.StopTimer()
 	contract.isCode(0)
-	in.evm.VMTimer.StartTimer()
 
 	if in.cfg.Debug {
 		defer func() {
@@ -817,7 +813,10 @@ func (in *GethEVMInterpreter) runPlain(state *InterpreterState, input []byte, re
 	// the execution of one of the operations or until the done flag is set by the
 	// parent context.
 	steps := 0
-
+	defer func() {
+		in.evm.VMTimer.StopTimer()
+	}()
+	in.evm.VMTimer.StartTimer()
 	for {
 		in.evm.VMTimer.dispatches += 1
 		// Block until next step should be processed.
@@ -996,10 +995,12 @@ func (in *GethEVMInterpreter) runSI(state *InterpreterState, input []byte, readO
 	// so that it get's executed _after_: the capturestate needs the stacks before
 	// they are returned to the pools
 	contract.Input = input
-	in.evm.VMTimer.StopTimer()
 	contract.isCode(0)
-	in.evm.VMTimer.StartTimer()
 
+	defer func() {
+		in.evm.VMTimer.StopTimer()
+	}()
+	in.evm.VMTimer.StartTimer()
 	if in.cfg.Debug {
 		defer func() {
 			if err != nil {
@@ -1041,7 +1042,7 @@ func (in *GethEVMInterpreter) runSI(state *InterpreterState, input []byte, readO
 		// fmt.Println("OP: ", sivm_op)
 		res, err = sivm_jump_table[sivm_op](&pc, in, callContext)
 		// if err == ErrOutOfGas {
-			// fmt.Println("Out of gas from: ", sivm_op)
+		// fmt.Println("Out of gas from: ", sivm_op)
 		// }
 		switch {
 		case err == ErrExecutionReverted:

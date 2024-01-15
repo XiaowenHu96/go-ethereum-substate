@@ -605,8 +605,10 @@ func opCreate(pc *uint64, interpreter *GethEVMInterpreter, scope *ScopeContext) 
 	if !value.IsZero() {
 		bigVal = value.ToBig()
 	}
-
+    
+    interpreter.evm.VMTimer.StopTimer()
 	res, addr, returnGas, suberr := interpreter.evm.Create(scope.Contract, input, gas, bigVal)
+    interpreter.evm.VMTimer.StartTimer()
 
 	// Push item on the stack based on the returned error. If the ruleset is
 	// homestead we must check for CodeStoreOutOfGasError (homestead only
@@ -692,7 +694,9 @@ func opCreate2(pc *uint64, interpreter *GethEVMInterpreter, scope *ScopeContext)
 		bigEndowment = endowment.ToBig()
 	}
 
+    interpreter.evm.VMTimer.StopTimer()
 	res, addr, returnGas, suberr := interpreter.evm.Create2(scope.Contract, input, gas, bigEndowment, &salt)
+    interpreter.evm.VMTimer.StartTimer()
 
 	// Push item on the stack based on the returned error.
 	if suberr != nil {
@@ -769,7 +773,9 @@ func opCall(pc *uint64, interpreter *GethEVMInterpreter, scope *ScopeContext) ([
 		bigVal = value.ToBig()
 	}
 
+    interpreter.evm.VMTimer.StopTimer()
 	ret, returnGas, err := interpreter.evm.Call(scope.Contract, toAddr, args, gas, bigVal)
+    interpreter.evm.VMTimer.StartTimer()
 
 	if err != nil {
 		temp.Clear()
@@ -845,7 +851,9 @@ func opCallCode(pc *uint64, interpreter *GethEVMInterpreter, scope *ScopeContext
 		bigVal = value.ToBig()
 	}
 
+    interpreter.evm.VMTimer.StopTimer()
 	ret, returnGas, err := interpreter.evm.CallCode(scope.Contract, toAddr, args, gas, bigVal)
+    interpreter.evm.VMTimer.StartTimer()
 
 	if err != nil {
 		temp.Clear()
@@ -912,7 +920,9 @@ func opDelegateCall(pc *uint64, interpreter *GethEVMInterpreter, scope *ScopeCon
 	// Get arguments from the memory.
 	args := scope.Memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
 
+    interpreter.evm.VMTimer.StopTimer()
 	ret, returnGas, err := interpreter.evm.DelegateCall(scope.Contract, toAddr, args, gas)
+    interpreter.evm.VMTimer.StartTimer()
 
 	if err != nil {
 		temp.Clear()
@@ -972,7 +982,9 @@ func opStaticCall(pc *uint64, interpreter *GethEVMInterpreter, scope *ScopeConte
 	// Get arguments from the memory.
 	args := scope.Memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
 
+    interpreter.evm.VMTimer.StopTimer()
 	ret, returnGas, err := interpreter.evm.StaticCall(scope.Contract, toAddr, args, gas)
+    interpreter.evm.VMTimer.StartTimer()
 
 	if err != nil {
 		temp.Clear()
